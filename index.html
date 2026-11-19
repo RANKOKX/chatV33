@@ -299,7 +299,7 @@ $('createBtn').onclick = async () => {
     }
     await db.ref('names/' + code).set({ created: TS() });
     await db.ref('rooms/' + code + '-' + pass + '/meta').set({ created: TS(), creator: uid, ttl: 60 });
-    openRoom(code, pass, name);
+    openRoom(code, pass, name, true);
   } catch (e) { homeError.textContent = ERR_FB; }
 };
 
@@ -320,11 +320,10 @@ $('joinBtn').onclick = async () => {
   } catch (e) { homeError.textContent = ERR_FB; }
 };
 
-function openRoom(code, pass, name) {
-  room = { code, pass, key: code + '-' + pass, name, ttl: 60, meta: null, isCreator: false };
+function openRoom(code, pass, name, creator) {
+  room = { code, pass, key: code + '-' + pass, name, ttl: 60, meta: null, isCreator: !!creator };
   $('home').classList.add('hidden'); $('homeTheme').classList.add('hidden');
   $('chat').classList.remove('hidden');
-  $('settingsBtn').classList.add('hidden');
   attach();
 }
 
@@ -367,9 +366,16 @@ function checkEmpty() {
 function onMeta(snap) {
   if (!room) return;
   if (snap.exists()) {
-    room.meta = snap.val();
-    room.ttl = Math.min(600, Math.max(10, Number(room.meta.ttl) || 60));
-    room.isCreator = room.meta.creator === uid;
+    const m = snap.val();
+    room.ttl = Math.min(600, Math.max(10, Number(m.ttl) || room.ttl || 60));
+    if (room.isCreator && m.creator !== uid) {
+      // les infos du salon ont été écrasées (ex. par un appareil avec une ancienne version) : on les rétablit
+      roomRef.child('meta').update({ creator: uid, ttl: room.ttl }).catch(() => {});
+      room.meta = Object.assign({}, m, { creator: uid, ttl: room.ttl });
+    } else {
+      room.meta = m;
+      room.isCreator = m.creator === uid;
+    }
   }
   updateHeader();
   cleanExpired();
