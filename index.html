@@ -6,68 +6,89 @@
 <title>Chat du lycée</title>
 <style>
   :root{
-    --ink:#14213d; --paper:#eef2f7; --card:#ffffff; --accent:#fca311; --mine:#14213d; --mine-text:#fff;
-    --other:#ffffff; --muted:#6b778d; --line:#d8dfeb; --danger:#c0392b;
+    --text:#14213d; --head:#14213d; --btn:#14213d; --paper:#eef2f7; --card:#ffffff; --accent:#fca311;
+    --mine:#14213d; --mine-text:#fff; --other:#ffffff; --muted:#6b778d; --line:#d8dfeb; --danger:#c0392b;
+    --shadow:rgba(20,33,61,.12);
+  }
+  :root[data-theme="dark"]{
+    --text:#e8edf7; --head:#0a0f1c; --btn:#2b4a8a; --paper:#0e1422; --card:#18213a;
+    --mine:#2b4a8a; --mine-text:#fff; --other:#1e2a47; --muted:#93a0bb; --line:#2b3857; --danger:#ff7a6b;
+    --shadow:rgba(0,0,0,.5);
+    color-scheme:dark;
   }
   *{box-sizing:border-box}
   html,body{height:100%;margin:0}
-  body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--paper);color:var(--ink);font-size:17px}
+  body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--paper);color:var(--text);font-size:17px}
   .hidden{display:none!important}
   button,input{font:inherit;color:inherit}
   button{cursor:pointer}
   :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 
+  .theme{border:2px solid var(--line);background:var(--card);border-radius:12px;width:44px;height:44px;font-size:20px;line-height:1;display:flex;align-items:center;justify-content:center}
+  #homeTheme{position:fixed;top:calc(14px + env(safe-area-inset-top,0px));right:14px}
+  header .theme{background:transparent;border-color:rgba(255,255,255,.4);color:#fff;padding:0;width:42px;height:42px}
+
   /* Accueil */
   #home{min-height:100%;display:flex;align-items:center;justify-content:center;padding:24px}
-  .panel{background:var(--card);border-radius:18px;padding:28px;width:100%;max-width:420px;box-shadow:0 6px 30px rgba(20,33,61,.12)}
+  .panel{background:var(--card);border-radius:18px;padding:28px;width:100%;max-width:420px;box-shadow:0 6px 30px var(--shadow)}
   h1{margin:0 0 4px;font-size:28px;letter-spacing:-.5px}
   .sub{margin:0 0 22px;color:var(--muted)}
   label{display:block;font-weight:600;margin:14px 0 6px}
-  input[type=text],input[type=tel]{width:100%;padding:13px 14px;border:2px solid var(--line);border-radius:12px;background:#fff}
-  input:focus{border-color:var(--ink);outline:none}
-  .code-input{font-size:34px;letter-spacing:14px;text-align:center;font-weight:700}
+  label small{font-weight:400;color:var(--muted)}
+  input[type=text],input[type=tel]{width:100%;padding:13px 14px;border:2px solid var(--line);border-radius:12px;background:var(--card)}
+  input:focus{border-color:var(--accent);outline:none}
+  .code-input{font-size:30px;letter-spacing:12px;text-align:center;font-weight:700}
   .btn{width:100%;padding:14px;border:0;border-radius:12px;font-weight:700;margin-top:12px}
-  .btn.primary{background:var(--ink);color:#fff}
-  .btn.accent{background:var(--accent);color:var(--ink)}
-  .sep{display:flex;align-items:center;gap:12px;color:var(--muted);margin:20px 0 4px;font-size:15px}
+  .btn.primary{background:var(--btn);color:#fff}
+  .btn.accent{background:var(--accent);color:#14213d}
+  .sep{display:flex;align-items:center;gap:12px;color:var(--muted);margin:22px 0 4px;font-size:15px}
   .sep::before,.sep::after{content:"";flex:1;height:1px;background:var(--line)}
   #homeError{color:var(--danger);min-height:22px;margin:12px 0 0;font-weight:600}
 
   /* Chat */
   #chat{height:100%;display:flex;flex-direction:column}
-  header{background:var(--ink);color:#fff;display:flex;align-items:center;gap:12px;padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top,0px))}
-  header .code{font-size:26px;font-weight:800;letter-spacing:6px;background:var(--accent);color:var(--ink);padding:2px 12px;border-radius:10px}
-  header .info{flex:1;line-height:1.2}
+  header{background:var(--head);color:#fff;display:flex;align-items:center;gap:10px;padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top,0px))}
+  header .code{font-size:26px;font-weight:800;letter-spacing:6px;background:var(--accent);color:#14213d;padding:2px 12px;border-radius:10px}
+  header .info{flex:1;line-height:1.2;min-width:0}
   header .info small{display:block;opacity:.7}
-  header button{background:transparent;border:2px solid rgba(255,255,255,.4);color:#fff;border-radius:10px;padding:8px 12px}
+  header .leave{background:transparent;border:2px solid rgba(255,255,255,.4);color:#fff;border-radius:10px;padding:8px 12px}
   #messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;-webkit-overflow-scrolling:touch}
   .empty{margin:auto;color:var(--muted);text-align:center;max-width:280px}
-  .msg{max-width:min(78%,520px);padding:9px 13px;border-radius:16px;background:var(--other);box-shadow:0 1px 2px rgba(20,33,61,.1);align-self:flex-start;border-bottom-left-radius:4px;word-wrap:break-word;overflow-wrap:anywhere}
+  .msg{max-width:min(78%,520px);padding:9px 13px;border-radius:16px;background:var(--other);box-shadow:0 1px 2px var(--shadow);align-self:flex-start;border-bottom-left-radius:4px;word-wrap:break-word;overflow-wrap:anywhere}
   .msg.mine{align-self:flex-end;background:var(--mine);color:var(--mine-text);border-bottom-left-radius:16px;border-bottom-right-radius:4px}
   .msg .who{font-size:13px;font-weight:700;color:var(--muted);margin-bottom:2px}
   .msg.mine .who{color:var(--accent)}
   .msg .time{font-size:12px;opacity:.6;margin-top:3px;text-align:right}
   .msg img{display:block;max-width:100%;max-height:340px;border-radius:10px;margin:4px 0;cursor:zoom-in}
+  .msg audio{display:block;width:240px;max-width:100%;margin:4px 0}
   .msg .txt{white-space:pre-wrap}
 
-  form{display:flex;gap:8px;align-items:flex-end;padding:10px 12px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));background:var(--card);border-top:1px solid var(--line)}
-  #text{flex:1;padding:12px 14px;border:2px solid var(--line);border-radius:22px;min-width:0}
+  form{display:flex;gap:8px;align-items:center;padding:10px 12px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));background:var(--card);border-top:1px solid var(--line)}
+  #text{flex:1;padding:12px 14px;border:2px solid var(--line);border-radius:22px;min-width:0;background:var(--paper)}
   .round{width:48px;height:48px;border-radius:50%;border:0;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-  .round.photo{background:var(--paper);color:var(--ink)}
-  .round.send{background:var(--accent);color:var(--ink);font-weight:800}
+  .round.tool{background:var(--paper);color:var(--text)}
+  .round.send{background:var(--accent);color:#14213d}
   .round svg{width:24px;height:24px}
-  #status{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 16px;border-radius:20px;font-size:15px}
+  #recBar{flex:1;display:flex;align-items:center;gap:10px;padding:0 6px;font-weight:700;min-width:0}
+  #recBar .dot{width:14px;height:14px;border-radius:50%;background:var(--danger)}
+  #recBar span.hint{font-weight:400;color:var(--muted);font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  form.recording .round.tool.mic{background:var(--danger);color:#fff}
+  @media (prefers-reduced-motion:no-preference){
+    form.recording #recBar .dot{animation:blink 1s infinite}
+    .msg{animation:pop .15s ease-out}
+  }
+  @keyframes blink{50%{opacity:.25}}
+  @keyframes pop{from{transform:scale(.97);opacity:0}to{transform:none;opacity:1}}
 
+  #status{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--head);color:#fff;padding:8px 16px;border-radius:20px;font-size:15px;z-index:5}
   #lightbox{position:fixed;inset:0;background:rgba(10,15,30,.92);display:flex;align-items:center;justify-content:center;padding:16px;z-index:10}
   #lightbox img{max-width:100%;max-height:100%;border-radius:8px}
-
-  @media (prefers-reduced-motion:no-preference){ .msg{animation:pop .15s ease-out} }
-  @keyframes pop{from{transform:scale(.97);opacity:0}to{transform:none;opacity:1}}
 </style>
 </head>
 <body>
 
 <!-- ACCUEIL -->
+<button class="theme" id="homeTheme" aria-label="Changer de thème">🌙</button>
 <div id="home">
   <div class="panel">
     <h1>Chat du lycée</h1>
@@ -76,11 +97,13 @@
     <label for="name">Ton prénom</label>
     <input type="text" id="name" maxlength="20" autocomplete="off" placeholder="Ex : Gabriel">
 
+    <label for="newCode">Code de ton salon <small>(laisse vide pour un code au hasard)</small></label>
+    <input type="tel" id="newCode" class="code-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="----" autocomplete="off">
     <button class="btn primary" id="createBtn">Créer un salon</button>
 
     <div class="sep">ou</div>
 
-    <label for="code">Code du salon</label>
+    <label for="code">Rejoindre avec un code</label>
     <input type="tel" id="code" class="code-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="0000" autocomplete="off">
     <button class="btn accent" id="joinBtn">Rejoindre</button>
 
@@ -93,16 +116,24 @@
   <header>
     <span class="code" id="roomCode">0000</span>
     <div class="info"><strong>Salon</strong><small>Donne ce code pour inviter</small></div>
-    <button id="leaveBtn">Quitter</button>
+    <button class="theme" id="chatTheme" aria-label="Changer de thème">🌙</button>
+    <button class="leave" id="leaveBtn">Quitter</button>
   </header>
   <div id="messages" aria-live="polite"></div>
   <form id="form" autocomplete="off">
     <input type="file" id="file" accept="image/*" class="hidden">
-    <button type="button" class="round photo" id="photoBtn" aria-label="Envoyer une photo">
+    <button type="button" class="round tool" id="photoBtn" aria-label="Envoyer une photo">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
     </button>
     <input type="text" id="text" maxlength="500" placeholder="Écris un message…" enterkeyhint="send">
-    <button type="submit" class="round send" aria-label="Envoyer">
+    <div id="recBar" class="hidden"><div class="dot"></div><span id="recTime">0:00</span><span class="hint">Appuie sur le micro pour envoyer</span></div>
+    <button type="button" class="round tool hidden" id="cancelRec" aria-label="Annuler le vocal">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <button type="button" class="round tool mic" id="micBtn" aria-label="Enregistrer un vocal">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="22"/></svg>
+    </button>
+    <button type="submit" class="round send" id="sendBtn" aria-label="Envoyer">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
     </button>
   </form>
@@ -113,9 +144,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script>
-/* ============================================================
-   1) COLLE ICI TA CONFIG FIREBASE (voir les consignes)
-   ============================================================ */
+/* ===================== CONFIG FIREBASE ===================== */
 const firebaseConfig = {
   apiKey: "AIzaSyDATR1YvhxIudceN_kVFj3N95CIGpa6_eA",
   authDomain: "chat-20b79.firebaseapp.com",
@@ -126,13 +155,25 @@ const firebaseConfig = {
   appId: "1:512835927511:web:0d64e0377453f309221f92",
   measurementId: "G-J4LLFXFE0H"
 };
-/* ============================================================ */
+/* =========================================================== */
 
 const $ = id => document.getElementById(id);
 const homeError = $('homeError');
 let db = null, room = null, msgRef = null;
 
-// Identifiant anonyme pour savoir quels messages sont les miens
+/* ---------- Thème sombre ---------- */
+function applyTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  const icon = t === 'dark' ? '☀️' : '🌙';
+  $('homeTheme').textContent = icon; $('chatTheme').textContent = icon;
+}
+let theme = localStorage.getItem('chat_theme') ||
+  (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+applyTheme(theme);
+function toggleTheme() { theme = theme === 'dark' ? 'light' : 'dark'; localStorage.setItem('chat_theme', theme); applyTheme(theme); }
+$('homeTheme').onclick = toggleTheme; $('chatTheme').onclick = toggleTheme;
+
+/* ---------- Identité ---------- */
 let uid = localStorage.getItem('chat_uid');
 if (!uid) { uid = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('chat_uid', uid); }
 $('name').value = localStorage.getItem('chat_name') || '';
@@ -151,21 +192,31 @@ function getName() {
   localStorage.setItem('chat_name', n);
   return n;
 }
+['code', 'newCode'].forEach(id => $(id).addEventListener('input', e => {
+  e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
+}));
 
-$('code').addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4); });
-
+/* ---------- Créer / rejoindre ---------- */
 $('createBtn').onclick = async () => {
   homeError.textContent = '';
   if (!db) return;
   const name = getName(); if (!name) return;
+  const custom = $('newCode').value;
+  if (custom && custom.length !== 4) { homeError.textContent = 'Ton code doit avoir 4 chiffres.'; return; }
   try {
+    const create = async c => {
+      await db.ref('rooms/' + c + '/meta').set({ created: firebase.database.ServerValue.TIMESTAMP });
+      openRoom(c, name);
+    };
+    if (custom) {
+      const snap = await db.ref('rooms/' + custom + '/meta').get();
+      if (snap.exists()) { homeError.textContent = 'Ce code est déjà pris. Choisis-en un autre.'; return; }
+      return create(custom);
+    }
     for (let i = 0; i < 30; i++) {
       const c = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
       const snap = await db.ref('rooms/' + c + '/meta').get();
-      if (!snap.exists()) {
-        await db.ref('rooms/' + c + '/meta').set({ created: firebase.database.ServerValue.TIMESTAMP });
-        return openRoom(c, name);
-      }
+      if (!snap.exists()) return create(c);
     }
     homeError.textContent = 'Impossible de créer un salon, réessaie.';
   } catch (e) { homeError.textContent = 'Erreur de connexion à Firebase. Vérifie les règles et la config.'; }
@@ -187,13 +238,15 @@ $('joinBtn').onclick = async () => {
 function openRoom(code, name) {
   room = { code, name };
   $('roomCode').textContent = code;
-  $('home').classList.add('hidden');
+  $('home').classList.add('hidden'); $('homeTheme').classList.add('hidden');
   $('chat').classList.remove('hidden');
-  const box = $('messages');
-  box.innerHTML = '<div class="empty" id="empty">Aucun message. Écris le premier !</div>';
+  $('messages').innerHTML = '<div class="empty" id="empty">Aucun message. Écris le premier !</div>';
   msgRef = db.ref('rooms/' + code + '/messages').limitToLast(100);
   msgRef.on('child_added', snap => addMessage(snap.val()));
 }
+
+/* ---------- Affichage des messages ---------- */
+function fmt(s) { s = Math.round(s || 0); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
 
 function addMessage(m) {
   const box = $('messages');
@@ -209,6 +262,11 @@ function addMessage(m) {
     const img = document.createElement('img'); img.src = m.img; img.alt = 'Photo de ' + (m.name || '');
     img.onclick = () => { $('lightbox').querySelector('img').src = m.img; $('lightbox').classList.remove('hidden'); };
     el.appendChild(img);
+  }
+  if (m.audio) {
+    const a = document.createElement('audio'); a.controls = true; a.preload = 'metadata'; a.src = m.audio;
+    el.appendChild(a);
+    if (m.dur) { const d = document.createElement('div'); d.className = 'time'; d.style.textAlign = 'left'; d.textContent = 'Vocal · ' + fmt(m.dur); el.appendChild(d); }
   }
   if (m.text) { const t = document.createElement('div'); t.className = 'txt'; t.textContent = m.text; el.appendChild(t); }
   if (typeof m.ts === 'number') {
@@ -235,14 +293,15 @@ function send(data) {
 
 $('form').onsubmit = e => {
   e.preventDefault();
+  if (recorder) return;
   const t = $('text').value.trim();
   if (!t) return;
   $('text').value = '';
   send({ text: t });
 };
 
-// Photos : réduites à 800 px max puis stockées dans la base (pas besoin de Firebase Storage)
-$('photoBtn').onclick = () => $('file').click();
+/* ---------- Photos ---------- */
+$('photoBtn').onclick = () => { if (!recorder) $('file').click(); };
 $('file').onchange = async e => {
   const f = e.target.files[0]; e.target.value = '';
   if (!f) return;
@@ -250,7 +309,6 @@ $('file').onchange = async e => {
   try { await send({ img: await shrink(f, 800, 0.65) }); flash('Photo envoyée'); }
   catch (err) { flash('Photo impossible à envoyer'); }
 };
-
 function shrink(file, max, quality) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
@@ -267,15 +325,73 @@ function shrink(file, max, quality) {
     img.src = url;
   });
 }
-
 $('lightbox').onclick = () => $('lightbox').classList.add('hidden');
 
+/* ---------- Vocaux ---------- */
+const MAX_REC = 40; // secondes
+let recorder = null, recStream = null, recChunks = [], recTimer = null, recStart = 0, recCancelled = false;
+
+function recUI(on) {
+  $('form').classList.toggle('recording', on);
+  $('text').classList.toggle('hidden', on);
+  $('recBar').classList.toggle('hidden', !on);
+  $('cancelRec').classList.toggle('hidden', !on);
+  $('photoBtn').classList.toggle('hidden', on);
+  $('sendBtn').classList.toggle('hidden', on);
+}
+
+async function startRec() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+    flash('Les vocaux ne marchent pas sur ce navigateur'); return;
+  }
+  try { recStream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch (e) { flash('Autorise le micro pour envoyer un vocal'); return; }
+
+  const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
+  const mime = types.find(t => MediaRecorder.isTypeSupported(t)) || '';
+  const opts = { audioBitsPerSecond: 24000 }; if (mime) opts.mimeType = mime;
+  recorder = new MediaRecorder(recStream, opts);
+  recChunks = []; recCancelled = false;
+  recorder.ondataavailable = e => { if (e.data && e.data.size) recChunks.push(e.data); };
+  recorder.onstop = async () => {
+    const secs = (Date.now() - recStart) / 1000;
+    const type = recorder.mimeType || mime || 'audio/webm';
+    recStream.getTracks().forEach(t => t.stop());
+    clearInterval(recTimer);
+    recorder = null; recUI(false);
+    if (recCancelled || secs < 0.7) return;
+    const blob = new Blob(recChunks, { type });
+    const url = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob); });
+    if (url.length > 650000) { flash('Vocal trop long'); return; }
+    flash('Envoi du vocal…');
+    await send({ audio: url, dur: Math.round(secs) });
+  };
+  recStart = Date.now();
+  recorder.start();
+  recUI(true);
+  $('recTime').textContent = '0:00';
+  recTimer = setInterval(() => {
+    const s = (Date.now() - recStart) / 1000;
+    $('recTime').textContent = fmt(s);
+    if (s >= MAX_REC) stopRec(false);
+  }, 250);
+}
+function stopRec(cancel) {
+  if (!recorder) return;
+  recCancelled = cancel;
+  if (recorder.state !== 'inactive') recorder.stop();
+}
+$('micBtn').onclick = () => { recorder ? stopRec(false) : startRec(); };
+$('cancelRec').onclick = () => stopRec(true);
+
+/* ---------- Quitter ---------- */
 $('leaveBtn').onclick = () => {
+  stopRec(true);
   if (msgRef) msgRef.off();
   msgRef = null; room = null;
   $('chat').classList.add('hidden');
-  $('home').classList.remove('hidden');
-  $('code').value = ''; homeError.textContent = '';
+  $('home').classList.remove('hidden'); $('homeTheme').classList.remove('hidden');
+  $('code').value = ''; $('newCode').value = ''; homeError.textContent = '';
 };
 </script>
 </body>
