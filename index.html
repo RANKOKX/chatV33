@@ -289,16 +289,16 @@ $('createBtn').onclick = async () => {
   try {
     let code = num;
     if (code) {
-      if ((await db.ref('names/' + code).get()).exists()) { homeError.textContent = 'Ce numéro de salon est déjà pris.'; return; }
+      if ((await db.ref('numeros/' + code).get()).exists()) { homeError.textContent = 'Ce numéro de salon est déjà pris.'; return; }
     } else {
       for (let i = 0; i < 30 && !code; i++) {
         const c = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
-        if (!(await db.ref('names/' + c).get()).exists()) code = c;
+        if (!(await db.ref('numeros/' + c).get()).exists()) code = c;
       }
       if (!code) { homeError.textContent = 'Impossible de créer un salon, réessaie.'; return; }
     }
-    await db.ref('names/' + code).set({ created: TS() });
-    await db.ref('rooms/' + code + '-' + pass + '/meta').set({ created: TS(), creator: uid, ttl: 60 });
+    await db.ref('numeros/' + code).set({ created: TS() });
+    await db.ref('salons/' + code + '-' + pass).set({ meta: { created: TS(), ttl: 60 }, creator: uid });
     openRoom(code, pass, name, true);
   } catch (e) { homeError.textContent = ERR_FB; }
 };
@@ -311,11 +311,11 @@ $('joinBtn').onclick = async () => {
   if (c.length !== 4 || p.length !== 4) { homeError.textContent = 'Entre le numéro du salon et le code secret (4 chiffres chacun).'; return; }
   try {
     const key = c + '-' + p;
-    const snap = await db.ref('rooms/' + key + '/meta').get();
+    const snap = await db.ref('salons/' + key + '/meta').get();
     if (!snap.exists()) { homeError.textContent = 'Numéro ou code secret incorrect.'; return; }
-    if ((await db.ref('rooms/' + key + '/bans/' + uid).get()).exists()) { homeError.textContent = 'Tu as été banni de ce salon.'; return; }
+    if ((await db.ref('salons/' + key + '/bans/' + uid).get()).exists()) { homeError.textContent = 'Tu as été banni de ce salon.'; return; }
     // salon resté vide : on efface les anciens messages avant d'entrer
-    if (!(await db.ref('rooms/' + key + '/presence').get()).exists()) await db.ref('rooms/' + key + '/messages').remove();
+    if (!(await db.ref('salons/' + key + '/presence').get()).exists()) await db.ref('salons/' + key + '/messages').remove();
     openRoom(c, p, name);
   } catch (e) { homeError.textContent = ERR_FB; }
 };
@@ -329,8 +329,8 @@ function openRoom(code, pass, name, creator) {
 
 /* ---------- Branchement sur un salon ---------- */
 function attach() {
-  roomRef = db.ref('rooms/' + room.key);
-  nameRef = db.ref('names/' + room.code);
+  roomRef = db.ref('salons/' + room.key);
+  nameRef = db.ref('numeros/' + room.code);
   presRef = roomRef.child('presence/' + cid);
   $('roomCode').textContent = room.code;
   $('messages').innerHTML = EMPTY;
@@ -344,6 +344,7 @@ function attach() {
     checkEmpty();
   });
   roomRef.child('meta').on('value', onMeta);
+  roomRef.child('creator').on('value', onCreator);
   roomRef.child('presence').on('value', onPresence);
   roomRef.child('bans').on('value', onBans);
   roomRef.child('moved').on('value', onMoved);
@@ -355,7 +356,7 @@ function attach() {
 function detach() {
   if (connRef) connRef.off();
   if (msgRef) msgRef.off();
-  if (roomRef) ['presence', 'meta', 'bans', 'moved'].forEach(p => roomRef.child(p).off());
+  if (roomRef) ['presence', 'meta', 'creator', 'bans', 'moved'].forEach(p => roomRef.child(p).off());
   connRef = null; msgRef = null;
 }
 
@@ -367,18 +368,20 @@ function onMeta(snap) {
   if (!room) return;
   if (snap.exists()) {
     const m = snap.val();
+    room.meta = m;
     room.ttl = Math.min(600, Math.max(10, Number(m.ttl) || room.ttl || 60));
-    if (room.isCreator && m.creator !== uid) {
-      // les infos du salon ont été écrasées (ex. par un appareil avec une ancienne version) : on les rétablit
-      roomRef.child('meta').update({ creator: uid, ttl: room.ttl }).catch(() => {});
-      room.meta = Object.assign({}, m, { creator: uid, ttl: room.ttl });
-    } else {
-      room.meta = m;
-      room.isCreator = m.creator === uid;
-    }
+    // durée effacée par un autre appareil : le créateur la rétablit
+    if (room.isCreator && m.ttl == null) roomRef.child('meta/ttl').set(room.ttl).catch(() => {});
   }
   updateHeader();
   cleanExpired();
+}
+
+function onCreator(snap) {
+  if (!room) return;
+  if (snap.exists()) room.isCreator = snap.val() === uid;
+  else if (room.isCreator) roomRef.child('creator').set(uid).catch(() => {}); // le créateur reste le créateur
+  updateHeader();
 }
 
 function updateHeader() {
@@ -414,7 +417,11 @@ function onMoved(snap) {
 async function joinPresence() {
   try {
     // recrée le salon s'il a été effacé pendant une coupure de connexion
-    if (!(await roomRef.child('meta').get()).exists()) await roomRef.child('meta').set(room.meta || { created: TS(), ttl: 60 });
+    if (!(await roomRef.child('meta').get()).exists()) {
+      if (!room.isCreator) { leaveRoom('Le salon a été fermé.'); return; }
+      await roomRef.child('meta').set({ created: TS(), ttl: room.ttl });
+      await roomRef.child('creator').set(uid);
+    }
     if (!(await nameRef.get()).exists()) await nameRef.set({ created: TS() });
     await presRef.set({ uid, name: room.name });
     updateDisconnect((await roomRef.child('presence').get()).numChildren());
@@ -660,14 +667,14 @@ $('changePassBtn').onclick = async () => {
   if (np === room.pass) { setMsg('Choisis un code différent de l’actuel.'); return; }
   const oldRef = roomRef, newKey = room.code + '-' + np;
   try {
-    if ((await db.ref('rooms/' + newKey + '/meta').get()).exists()) { setMsg('Ce code est déjà utilisé.'); return; }
+    if ((await db.ref('salons/' + newKey + '/meta').get()).exists()) { setMsg('Ce code est déjà utilisé.'); return; }
     const [msgs, meta, bs] = await Promise.all([
       oldRef.child('messages').get(), oldRef.child('meta').get(), oldRef.child('bans').get()
     ]);
-    const copy = { meta: meta.val() };
+    const copy = { meta: meta.val(), creator: uid };
     if (msgs.exists()) copy.messages = msgs.val();
     if (bs.exists()) copy.bans = bs.val();
-    await db.ref('rooms/' + newKey).update(copy);
+    await db.ref('salons/' + newKey).update(copy);
     await oldRef.child('moved').set({ to: np });
     if (room.pass !== np) switchRoom(np);
     setTimeout(() => oldRef.remove().catch(() => {}), 20000);
