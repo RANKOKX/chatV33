@@ -190,8 +190,8 @@
 
     <h3>Durée des messages</h3>
     <p class="hint">Les messages disparaissent après <strong id="ttlLabel">1 h</strong>.</p>
-    <input type="range" id="ttl" min="10" max="600" step="10" value="60" aria-label="Durée des messages">
-    <div class="range-labels"><span>10 min</span><span>10 h</span></div>
+    <input type="range" id="ttl" min="0" max="11" step="1" value="7" aria-label="Durée des messages">
+    <div class="range-labels"><span>30 s</span><span>10 h</span></div>
 
     <h3>Changer le code secret</h3>
     <p class="hint">Les personnes déjà dans le salon suivent le changement. Les autres devront utiliser le nouveau code.</p>
@@ -274,9 +274,17 @@ function getName() {
 
 const TS = () => firebase.database.ServerValue.TIMESTAMP;
 const ERR_FB = 'Erreur de connexion à Firebase. Vérifie les règles et la config.';
-function fmtTtl(min) {
-  if (min < 60) return min + ' min';
-  const h = Math.floor(min / 60), m = min % 60;
+// paliers de durée en secondes : 30 s, 1 min, 2 min, 5 min, 10 min, 15 min, 30 min, 1 h, 2 h, 3 h, 5 h, 10 h
+const TTL_STEPS = [30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 10800, 18000, 36000];
+function nearestStep(sec) {
+  let best = 0;
+  TTL_STEPS.forEach((v, i) => { if (Math.abs(v - sec) < Math.abs(TTL_STEPS[best] - sec)) best = i; });
+  return best;
+}
+function fmtTtl(sec) {
+  if (sec < 60) return sec + ' s';
+  if (sec < 3600) return Math.round(sec / 60) + ' min';
+  const h = Math.floor(sec / 3600), m = Math.round((sec % 3600) / 60);
   return h + ' h' + (m ? ' ' + String(m).padStart(2, '0') : '');
 }
 
@@ -300,7 +308,7 @@ $('createBtn').onclick = async () => {
       if (!code) { homeError.textContent = 'Impossible de créer un salon, réessaie.'; return; }
     }
     await db.ref('numeros/' + code).set({ created: TS() });
-    await db.ref('salons/' + code + '-' + pass).set({ meta: { created: TS(), ttl: 60 }, creator: uid });
+    await db.ref('salons/' + code + '-' + pass).set({ meta: { created: TS(), ttlSec: 3600 }, creator: uid });
     openRoom(code, pass, name, true);
   } catch (e) { homeError.textContent = ERR_FB; }
 };
@@ -324,7 +332,7 @@ $('joinBtn').onclick = async () => {
 };
 
 function openRoom(code, pass, name, creator) {
-  room = { code, pass, key: code + '-' + pass, name, ttl: 60, meta: null, isCreator: !!creator };
+  room = { code, pass, key: code + '-' + pass, name, ttl: 3600, meta: null, isCreator: !!creator };
   $('home').classList.add('hidden'); $('homeTheme').classList.add('hidden');
   $('chat').classList.remove('hidden');
   attach();
@@ -373,9 +381,10 @@ function onMeta(snap) {
   if (snap.exists()) {
     const m = snap.val();
     room.meta = m;
-    room.ttl = Math.min(600, Math.max(10, Number(m.ttl) || room.ttl || 60));
+    const sec = Number(m.ttlSec) || (Number(m.ttl) ? Number(m.ttl) * 60 : 0) || room.ttl || 3600;
+    room.ttl = Math.min(36000, Math.max(30, sec));
     // durée effacée par un autre appareil : le créateur la rétablit
-    if (room.isCreator && m.ttl == null) roomRef.child('meta/ttl').set(room.ttl).catch(() => {});
+    if (room.isCreator && m.ttlSec == null) roomRef.child('meta/ttlSec').set(room.ttl).catch(() => {});
   }
   updateHeader();
   cleanExpired();
@@ -394,7 +403,7 @@ function updateHeader() {
   $('settingsBtn').classList.toggle('hidden', !room.isCreator);
   $('messages').classList.toggle('admin', !!room.isCreator);
   $('ttlLabel').textContent = fmtTtl(room.ttl);
-  if (document.activeElement !== $('ttl')) $('ttl').value = room.ttl;
+  if (document.activeElement !== $('ttl')) $('ttl').value = nearestStep(room.ttl);
   if (room.isCreator === false) $('settings').classList.add('hidden');
 }
 
@@ -424,7 +433,7 @@ async function joinPresence() {
     // recrée le salon s'il a été effacé pendant une coupure de connexion
     if (!(await roomRef.child('meta').get()).exists()) {
       if (!room.isCreator) { leaveRoom('Le salon a été fermé.'); return; }
-      await roomRef.child('meta').set({ created: TS(), ttl: room.ttl });
+      await roomRef.child('meta').set({ created: TS(), ttlSec: room.ttl });
       await roomRef.child('creator').set(uid);
     }
     if (!(await nameRef.get()).exists()) await nameRef.set({ created: TS() });
@@ -497,7 +506,7 @@ function addMessage(key, m) {
 // Les messages trop vieux (selon la durée choisie) disparaissent
 function cleanExpired() {
   if (!room || !roomRef) return;
-  const now = Date.now() + serverOffset, lim = room.ttl * 60000;
+  const now = Date.now() + serverOffset, lim = room.ttl * 1000;
   document.querySelectorAll('#messages .msg').forEach(el => {
     const ts = Number(el.dataset.ts);
     if (ts && now - ts > lim) {
@@ -507,7 +516,7 @@ function cleanExpired() {
   });
   checkEmpty();
 }
-setInterval(cleanExpired, 15000);
+setInterval(cleanExpired, 5000);
 
 function flash(msg) {
   let s = $('status');
@@ -623,10 +632,11 @@ $('settingsBtn').onclick = openSettings;
 $('closeSettings').onclick = closeSettings;
 $('settings').addEventListener('click', e => { if (e.target === $('settings')) closeSettings(); });
 
-$('ttl').addEventListener('input', e => { $('ttlLabel').textContent = fmtTtl(Number(e.target.value)); });
+$('ttl').addEventListener('input', e => { $('ttlLabel').textContent = fmtTtl(TTL_STEPS[Number(e.target.value)]); });
 $('ttl').addEventListener('change', async e => {
   if (!room || !room.isCreator) return;
-  try { await roomRef.child('meta/ttl').set(Number(e.target.value)); setMsg('Durée enregistrée : ' + fmtTtl(Number(e.target.value)) + '.'); }
+  const sec = TTL_STEPS[Number(e.target.value)];
+  try { await roomRef.child('meta/ttlSec').set(sec); setMsg('Durée enregistrée : ' + fmtTtl(sec) + '.'); }
   catch (err) { setMsg('Impossible d’enregistrer. Vérifie les règles Firebase.'); }
 });
 
