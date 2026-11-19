@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chat du lycée</title>
+<style>
+  :root{
+    --ink:#14213d; --paper:#eef2f7; --card:#ffffff; --accent:#fca311; --mine:#14213d; --mine-text:#fff;
+    --other:#ffffff; --muted:#6b778d; --line:#d8dfeb; --danger:#c0392b;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--paper);color:var(--ink);font-size:17px}
+  .hidden{display:none!important}
+  button,input{font:inherit;color:inherit}
+  button{cursor:pointer}
+  :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+  /* Accueil */
+  #home{min-height:100%;display:flex;align-items:center;justify-content:center;padding:24px}
+  .panel{background:var(--card);border-radius:18px;padding:28px;width:100%;max-width:420px;box-shadow:0 6px 30px rgba(20,33,61,.12)}
+  h1{margin:0 0 4px;font-size:28px;letter-spacing:-.5px}
+  .sub{margin:0 0 22px;color:var(--muted)}
+  label{display:block;font-weight:600;margin:14px 0 6px}
+  input[type=text],input[type=tel]{width:100%;padding:13px 14px;border:2px solid var(--line);border-radius:12px;background:#fff}
+  input:focus{border-color:var(--ink);outline:none}
+  .code-input{font-size:34px;letter-spacing:14px;text-align:center;font-weight:700}
+  .btn{width:100%;padding:14px;border:0;border-radius:12px;font-weight:700;margin-top:12px}
+  .btn.primary{background:var(--ink);color:#fff}
+  .btn.accent{background:var(--accent);color:var(--ink)}
+  .sep{display:flex;align-items:center;gap:12px;color:var(--muted);margin:20px 0 4px;font-size:15px}
+  .sep::before,.sep::after{content:"";flex:1;height:1px;background:var(--line)}
+  #homeError{color:var(--danger);min-height:22px;margin:12px 0 0;font-weight:600}
+
+  /* Chat */
+  #chat{height:100%;display:flex;flex-direction:column}
+  header{background:var(--ink);color:#fff;display:flex;align-items:center;gap:12px;padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top,0px))}
+  header .code{font-size:26px;font-weight:800;letter-spacing:6px;background:var(--accent);color:var(--ink);padding:2px 12px;border-radius:10px}
+  header .info{flex:1;line-height:1.2}
+  header .info small{display:block;opacity:.7}
+  header button{background:transparent;border:2px solid rgba(255,255,255,.4);color:#fff;border-radius:10px;padding:8px 12px}
+  #messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;-webkit-overflow-scrolling:touch}
+  .empty{margin:auto;color:var(--muted);text-align:center;max-width:280px}
+  .msg{max-width:min(78%,520px);padding:9px 13px;border-radius:16px;background:var(--other);box-shadow:0 1px 2px rgba(20,33,61,.1);align-self:flex-start;border-bottom-left-radius:4px;word-wrap:break-word;overflow-wrap:anywhere}
+  .msg.mine{align-self:flex-end;background:var(--mine);color:var(--mine-text);border-bottom-left-radius:16px;border-bottom-right-radius:4px}
+  .msg .who{font-size:13px;font-weight:700;color:var(--muted);margin-bottom:2px}
+  .msg.mine .who{color:var(--accent)}
+  .msg .time{font-size:12px;opacity:.6;margin-top:3px;text-align:right}
+  .msg img{display:block;max-width:100%;max-height:340px;border-radius:10px;margin:4px 0;cursor:zoom-in}
+  .msg .txt{white-space:pre-wrap}
+
+  form{display:flex;gap:8px;align-items:flex-end;padding:10px 12px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));background:var(--card);border-top:1px solid var(--line)}
+  #text{flex:1;padding:12px 14px;border:2px solid var(--line);border-radius:22px;min-width:0}
+  .round{width:48px;height:48px;border-radius:50%;border:0;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .round.photo{background:var(--paper);color:var(--ink)}
+  .round.send{background:var(--accent);color:var(--ink);font-weight:800}
+  .round svg{width:24px;height:24px}
+  #status{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 16px;border-radius:20px;font-size:15px}
+
+  #lightbox{position:fixed;inset:0;background:rgba(10,15,30,.92);display:flex;align-items:center;justify-content:center;padding:16px;z-index:10}
+  #lightbox img{max-width:100%;max-height:100%;border-radius:8px}
+
+  @media (prefers-reduced-motion:no-preference){ .msg{animation:pop .15s ease-out} }
+  @keyframes pop{from{transform:scale(.97);opacity:0}to{transform:none;opacity:1}}
+</style>
+</head>
+<body>
+
+<!-- ACCUEIL -->
+<div id="home">
+  <div class="panel">
+    <h1>Chat du lycée</h1>
+    <p class="sub">Crée un salon ou entre avec un code à 4 chiffres.</p>
+
+    <label for="name">Ton prénom</label>
+    <input type="text" id="name" maxlength="20" autocomplete="off" placeholder="Ex : Gabriel">
+
+    <button class="btn primary" id="createBtn">Créer un salon</button>
+
+    <div class="sep">ou</div>
+
+    <label for="code">Code du salon</label>
+    <input type="tel" id="code" class="code-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="0000" autocomplete="off">
+    <button class="btn accent" id="joinBtn">Rejoindre</button>
+
+    <p id="homeError" role="alert"></p>
+  </div>
+</div>
+
+<!-- CHAT -->
+<div id="chat" class="hidden">
+  <header>
+    <span class="code" id="roomCode">0000</span>
+    <div class="info"><strong>Salon</strong><small>Donne ce code pour inviter</small></div>
+    <button id="leaveBtn">Quitter</button>
+  </header>
+  <div id="messages" aria-live="polite"></div>
+  <form id="form" autocomplete="off">
+    <input type="file" id="file" accept="image/*" class="hidden">
+    <button type="button" class="round photo" id="photoBtn" aria-label="Envoyer une photo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+    </button>
+    <input type="text" id="text" maxlength="500" placeholder="Écris un message…" enterkeyhint="send">
+    <button type="submit" class="round send" aria-label="Envoyer">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+    </button>
+  </form>
+</div>
+
+<div id="lightbox" class="hidden"><img alt="Photo agrandie"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+/* ============================================================
+   1) COLLE ICI TA CONFIG FIREBASE (voir les consignes)
+   ============================================================ */
+const firebaseConfig = {
+  apiKey: "AIzaSyDATR1YvhxIudceN_kVFj3N95CIGpa6_eA",
+  authDomain: "chat-20b79.firebaseapp.com",
+  databaseURL: "https://chat-20b79-default-rtdb.firebaseio.com",
+  projectId: "chat-20b79",
+  storageBucket: "chat-20b79.firebasestorage.app",
+  messagingSenderId: "512835927511",
+  appId: "1:512835927511:web:0d64e0377453f309221f92",
+  measurementId: "G-J4LLFXFE0H"
+};
+/* ============================================================ */
+
+const $ = id => document.getElementById(id);
+const homeError = $('homeError');
+let db = null, room = null, msgRef = null;
+
+// Identifiant anonyme pour savoir quels messages sont les miens
+let uid = localStorage.getItem('chat_uid');
+if (!uid) { uid = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('chat_uid', uid); }
+$('name').value = localStorage.getItem('chat_name') || '';
+
+try {
+  if (firebaseConfig.apiKey.startsWith('COLLE')) throw new Error('config');
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.database();
+} catch (e) {
+  homeError.textContent = 'Firebase n’est pas configuré. Colle ta config dans index.html.';
+}
+
+function getName() {
+  const n = $('name').value.trim();
+  if (!n) { homeError.textContent = 'Entre ton prénom d’abord.'; $('name').focus(); return null; }
+  localStorage.setItem('chat_name', n);
+  return n;
+}
+
+$('code').addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4); });
+
+$('createBtn').onclick = async () => {
+  homeError.textContent = '';
+  if (!db) return;
+  const name = getName(); if (!name) return;
+  try {
+    for (let i = 0; i < 30; i++) {
+      const c = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+      const snap = await db.ref('rooms/' + c + '/meta').get();
+      if (!snap.exists()) {
+        await db.ref('rooms/' + c + '/meta').set({ created: firebase.database.ServerValue.TIMESTAMP });
+        return openRoom(c, name);
+      }
+    }
+    homeError.textContent = 'Impossible de créer un salon, réessaie.';
+  } catch (e) { homeError.textContent = 'Erreur de connexion à Firebase. Vérifie les règles et la config.'; }
+};
+
+$('joinBtn').onclick = async () => {
+  homeError.textContent = '';
+  if (!db) return;
+  const name = getName(); if (!name) return;
+  const c = $('code').value;
+  if (c.length !== 4) { homeError.textContent = 'Le code doit avoir 4 chiffres.'; return; }
+  try {
+    const snap = await db.ref('rooms/' + c + '/meta').get();
+    if (!snap.exists()) { homeError.textContent = 'Ce salon n’existe pas.'; return; }
+    openRoom(c, name);
+  } catch (e) { homeError.textContent = 'Erreur de connexion à Firebase. Vérifie les règles et la config.'; }
+};
+
+function openRoom(code, name) {
+  room = { code, name };
+  $('roomCode').textContent = code;
+  $('home').classList.add('hidden');
+  $('chat').classList.remove('hidden');
+  const box = $('messages');
+  box.innerHTML = '<div class="empty" id="empty">Aucun message. Écris le premier !</div>';
+  msgRef = db.ref('rooms/' + code + '/messages').limitToLast(100);
+  msgRef.on('child_added', snap => addMessage(snap.val()));
+}
+
+function addMessage(m) {
+  const box = $('messages');
+  const empty = $('empty'); if (empty) empty.remove();
+  const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 140;
+  const mine = m.uid === uid;
+
+  const el = document.createElement('div');
+  el.className = 'msg' + (mine ? ' mine' : '');
+  const who = document.createElement('div'); who.className = 'who'; who.textContent = m.name || '?';
+  el.appendChild(who);
+  if (m.img) {
+    const img = document.createElement('img'); img.src = m.img; img.alt = 'Photo de ' + (m.name || '');
+    img.onclick = () => { $('lightbox').querySelector('img').src = m.img; $('lightbox').classList.remove('hidden'); };
+    el.appendChild(img);
+  }
+  if (m.text) { const t = document.createElement('div'); t.className = 'txt'; t.textContent = m.text; el.appendChild(t); }
+  if (typeof m.ts === 'number') {
+    const tm = document.createElement('div'); tm.className = 'time';
+    tm.textContent = new Date(m.ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    el.appendChild(tm);
+  }
+  box.appendChild(el);
+  if (nearBottom || mine) box.scrollTop = box.scrollHeight;
+}
+
+function flash(msg) {
+  let s = $('status');
+  if (!s) { s = document.createElement('div'); s.id = 'status'; document.body.appendChild(s); }
+  s.textContent = msg; s.classList.remove('hidden');
+  clearTimeout(flash.t); flash.t = setTimeout(() => s.classList.add('hidden'), 2500);
+}
+
+function send(data) {
+  return db.ref('rooms/' + room.code + '/messages').push(Object.assign({
+    name: room.name, uid, ts: firebase.database.ServerValue.TIMESTAMP
+  }, data)).catch(() => flash('Message non envoyé'));
+}
+
+$('form').onsubmit = e => {
+  e.preventDefault();
+  const t = $('text').value.trim();
+  if (!t) return;
+  $('text').value = '';
+  send({ text: t });
+};
+
+// Photos : réduites à 800 px max puis stockées dans la base (pas besoin de Firebase Storage)
+$('photoBtn').onclick = () => $('file').click();
+$('file').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  flash('Envoi de la photo…');
+  try { await send({ img: await shrink(f, 800, 0.65) }); flash('Photo envoyée'); }
+  catch (err) { flash('Photo impossible à envoyer'); }
+};
+
+function shrink(file, max, quality) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(); };
+    img.src = url;
+  });
+}
+
+$('lightbox').onclick = () => $('lightbox').classList.add('hidden');
+
+$('leaveBtn').onclick = () => {
+  if (msgRef) msgRef.off();
+  msgRef = null; room = null;
+  $('chat').classList.add('hidden');
+  $('home').classList.remove('hidden');
+  $('code').value = ''; homeError.textContent = '';
+};
+</script>
+</body>
+</html>
