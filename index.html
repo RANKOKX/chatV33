@@ -67,6 +67,8 @@
   .msg .foot .time{margin:0}
   .msg .del{background:transparent;border:0;padding:4px 6px;margin:-4px -6px;color:inherit;opacity:.65;font-size:13px;text-decoration:underline;border-radius:6px}
   .msg .del:hover{opacity:1}
+  .msg:not(.mine) .del{display:none}
+  #messages.admin .msg:not(.mine) .del{display:inline}
 
   form{display:flex;gap:8px;align-items:center;padding:10px 12px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));background:var(--card);border-top:1px solid var(--line)}
   #text{flex:1;padding:12px 14px;border:2px solid var(--line);border-radius:22px;min-width:0;background:var(--paper)}
@@ -313,6 +315,7 @@ $('joinBtn').onclick = async () => {
     const key = c + '-' + p;
     const snap = await db.ref('salons/' + key + '/meta').get();
     if (!snap.exists()) { homeError.textContent = 'Numéro ou code secret incorrect.'; return; }
+    if ((await db.ref('salons/' + key + '/closed').get()).exists()) { homeError.textContent = 'Ce salon est fermé.'; return; }
     if ((await db.ref('salons/' + key + '/bans/' + uid).get()).exists()) { homeError.textContent = 'Tu as été banni de ce salon.'; return; }
     // salon resté vide : on efface les anciens messages avant d'entrer
     if (!(await db.ref('salons/' + key + '/presence').get()).exists()) await db.ref('salons/' + key + '/messages').remove();
@@ -348,6 +351,7 @@ function attach() {
   roomRef.child('presence').on('value', onPresence);
   roomRef.child('bans').on('value', onBans);
   roomRef.child('moved').on('value', onMoved);
+  roomRef.child('closed').on('value', snap => { if (room && snap.val() === true) leaveRoom('Le créateur a fermé le salon.'); });
   connRef = db.ref('.info/connected');
   connRef.on('value', snap => { if (snap.val() === true && room) joinPresence(); });
   updateHeader();
@@ -356,7 +360,7 @@ function attach() {
 function detach() {
   if (connRef) connRef.off();
   if (msgRef) msgRef.off();
-  if (roomRef) ['presence', 'meta', 'creator', 'bans', 'moved'].forEach(p => roomRef.child(p).off());
+  if (roomRef) ['presence', 'meta', 'creator', 'bans', 'moved', 'closed'].forEach(p => roomRef.child(p).off());
   connRef = null; msgRef = null;
 }
 
@@ -388,6 +392,7 @@ function updateHeader() {
   if (!room) return;
   $('ttlInfo').textContent = 'Messages effacés après ' + fmtTtl(room.ttl);
   $('settingsBtn').classList.toggle('hidden', !room.isCreator);
+  $('messages').classList.toggle('admin', !!room.isCreator);
   $('ttlLabel').textContent = fmtTtl(room.ttl);
   if (document.activeElement !== $('ttl')) $('ttl').value = room.ttl;
   if (room.isCreator === false) $('settings').classList.add('hidden');
@@ -469,10 +474,11 @@ function addMessage(key, m) {
   }
   if (m.text) { const t = document.createElement('div'); t.className = 'txt'; t.textContent = m.text; el.appendChild(t); }
   const foot = document.createElement('div'); foot.className = 'foot';
-  if (mine) {
+  {
     const del = document.createElement('button'); del.type = 'button'; del.className = 'del'; del.textContent = 'Supprimer';
     del.onclick = () => {
-      if (confirm('Supprimer ce message ?')) {
+      const q = mine ? 'Supprimer ce message ?' : 'Supprimer ce message de ' + (m.name || 'cette personne') + ' ?';
+      if (confirm(q)) {
         roomRef.child('messages/' + key).remove().catch(() => flash('Suppression impossible'));
       }
     };
@@ -692,9 +698,9 @@ function switchRoom(np) {
 }
 
 /* ---------- Quitter ---------- */
-async function leaveRoom(message) {
+async function leaveRoom(message, closeAll) {
   stopRec(true);
-  const rr = roomRef, nr = nameRef, pr = presRef;
+  const rr = roomRef, nr = nameRef, pr = presRef, wasAdmin = !!(room && room.isCreator);
   detach();
   room = null; roomRef = null; nameRef = null; presRef = null; members = []; bans = {};
   closeSettings();
@@ -705,13 +711,22 @@ async function leaveRoom(message) {
   try {
     if (rr) {
       await rr.onDisconnect().cancel(); await nr.onDisconnect().cancel();
+      if (closeAll && wasAdmin) {
+        // l'admin part : tout le monde est sorti du salon, puis le salon et ses messages sont supprimés
+        await rr.child('closed').set(true);
+        setTimeout(() => { rr.remove().catch(() => {}); nr.remove().catch(() => {}); }, 3000);
+        return;
+      }
       await pr.remove();
       // plus personne : le salon et tous ses messages sont supprimés
       if (!(await rr.child('presence').get()).exists()) { await rr.remove(); await nr.remove(); }
     }
   } catch (e) {}
 }
-$('leaveBtn').onclick = () => leaveRoom('');
+$('leaveBtn').onclick = () => {
+  if (room && room.isCreator && !confirm('Si tu quittes, tout le monde est sorti du salon et tous les messages sont supprimés. Continuer ?')) return;
+  leaveRoom('', true);
+};
 </script>
 </body>
 </html>
