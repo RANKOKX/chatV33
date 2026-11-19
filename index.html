@@ -37,7 +37,9 @@
   label small{font-weight:400;color:var(--muted)}
   input[type=text],input[type=tel]{width:100%;padding:13px 14px;border:2px solid var(--line);border-radius:12px;background:var(--card)}
   input:focus{border-color:var(--accent);outline:none}
-  .code-input{font-size:30px;letter-spacing:12px;text-align:center;font-weight:700}
+  .code-input{font-size:26px;letter-spacing:8px;text-align:center;font-weight:700;padding:13px 6px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .row label{margin-top:14px}
   .btn{width:100%;padding:14px;border:0;border-radius:12px;font-weight:700;margin-top:12px}
   .btn.primary{background:var(--btn);color:#fff}
   .btn.accent{background:var(--accent);color:#14213d}
@@ -96,19 +98,35 @@
 <div id="home">
   <div class="panel">
     <h1>Chat du lycée</h1>
-    <p class="sub">Crée un salon ou entre avec un code à 4 chiffres.</p>
+    <p class="sub">Crée un salon avec un numéro et un code secret, ou rejoins-en un.</p>
 
     <label for="name">Ton prénom</label>
     <input type="text" id="name" maxlength="20" autocomplete="off" placeholder="Ex : Gabriel">
 
-    <label for="newCode">Code de ton salon <small>(laisse vide pour un code au hasard)</small></label>
-    <input type="tel" id="newCode" class="code-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="----" autocomplete="off">
+    <div class="row">
+      <div>
+        <label for="newCode">Numéro <small>(vide = hasard)</small></label>
+        <input type="tel" id="newCode" class="code-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="----" autocomplete="off">
+      </div>
+      <div>
+        <label for="newPass">Code secret</label>
+        <input type="tel" id="newPass" class="code-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="----" autocomplete="off">
+      </div>
+    </div>
     <button class="btn primary" id="createBtn">Créer un salon</button>
 
     <div class="sep">ou</div>
 
-    <label for="code">Rejoindre avec un code</label>
-    <input type="tel" id="code" class="code-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="0000" autocomplete="off">
+    <div class="row">
+      <div>
+        <label for="code">Numéro du salon</label>
+        <input type="tel" id="code" class="code-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="0000" autocomplete="off">
+      </div>
+      <div>
+        <label for="pass">Code secret</label>
+        <input type="tel" id="pass" class="code-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="----" autocomplete="off">
+      </div>
+    </div>
     <button class="btn accent" id="joinBtn">Rejoindre</button>
 
     <p id="homeError" role="alert"></p>
@@ -119,7 +137,7 @@
 <div id="chat" class="hidden">
   <header>
     <span class="code" id="roomCode">0000</span>
-    <div class="info"><strong>Salon</strong><small>Donne ce code pour inviter</small></div>
+    <div class="info"><strong>Salon</strong><small>Code secret : <span id="roomPass">----</span></small></div>
     <button class="theme" id="chatTheme" aria-label="Changer de thème">🌙</button>
     <button class="leave" id="leaveBtn">Quitter</button>
   </header>
@@ -196,62 +214,104 @@ function getName() {
   localStorage.setItem('chat_name', n);
   return n;
 }
-['code', 'newCode'].forEach(id => $(id).addEventListener('input', e => {
+['code', 'pass', 'newCode', 'newPass'].forEach(id => $(id).addEventListener('input', e => {
   e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
 }));
 
 /* ---------- Créer / rejoindre ---------- */
+const TS = () => firebase.database.ServerValue.TIMESTAMP;
+const ERR_FB = 'Erreur de connexion à Firebase. Vérifie les règles et la config.';
+const cid = Math.random().toString(36).slice(2); // identifiant de cet onglet
+let roomRef = null, nameRef = null, presRef = null, connRef = null;
+
 $('createBtn').onclick = async () => {
   homeError.textContent = '';
   if (!db) return;
   const name = getName(); if (!name) return;
-  const custom = $('newCode').value;
-  if (custom && custom.length !== 4) { homeError.textContent = 'Ton code doit avoir 4 chiffres.'; return; }
+  const num = $('newCode').value, pass = $('newPass').value;
+  if (num && num.length !== 4) { homeError.textContent = 'Le numéro du salon doit avoir 4 chiffres.'; return; }
+  if (pass.length !== 4) { homeError.textContent = 'Choisis un code secret à 4 chiffres.'; return; }
   try {
-    const create = async c => {
-      await db.ref('rooms/' + c + '/meta').set({ created: firebase.database.ServerValue.TIMESTAMP });
-      openRoom(c, name);
-    };
-    if (custom) {
-      const snap = await db.ref('rooms/' + custom + '/meta').get();
-      if (snap.exists()) { homeError.textContent = 'Ce code est déjà pris. Choisis-en un autre.'; return; }
-      return create(custom);
+    let code = num;
+    if (code) {
+      if ((await db.ref('names/' + code).get()).exists()) { homeError.textContent = 'Ce numéro de salon est déjà pris.'; return; }
+    } else {
+      for (let i = 0; i < 30 && !code; i++) {
+        const c = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+        if (!(await db.ref('names/' + c).get()).exists()) code = c;
+      }
+      if (!code) { homeError.textContent = 'Impossible de créer un salon, réessaie.'; return; }
     }
-    for (let i = 0; i < 30; i++) {
-      const c = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
-      const snap = await db.ref('rooms/' + c + '/meta').get();
-      if (!snap.exists()) return create(c);
-    }
-    homeError.textContent = 'Impossible de créer un salon, réessaie.';
-  } catch (e) { homeError.textContent = 'Erreur de connexion à Firebase. Vérifie les règles et la config.'; }
+    await db.ref('names/' + code).set({ created: TS() });
+    await db.ref('rooms/' + code + '-' + pass + '/meta').set({ created: TS() });
+    openRoom(code, pass, name);
+  } catch (e) { homeError.textContent = ERR_FB; }
 };
 
 $('joinBtn').onclick = async () => {
   homeError.textContent = '';
   if (!db) return;
   const name = getName(); if (!name) return;
-  const c = $('code').value;
-  if (c.length !== 4) { homeError.textContent = 'Le code doit avoir 4 chiffres.'; return; }
+  const c = $('code').value, p = $('pass').value;
+  if (c.length !== 4 || p.length !== 4) { homeError.textContent = 'Entre le numéro du salon et le code secret (4 chiffres chacun).'; return; }
   try {
-    const snap = await db.ref('rooms/' + c + '/meta').get();
-    if (!snap.exists()) { homeError.textContent = 'Ce salon n’existe pas.'; return; }
-    openRoom(c, name);
-  } catch (e) { homeError.textContent = 'Erreur de connexion à Firebase. Vérifie les règles et la config.'; }
+    const key = c + '-' + p;
+    const snap = await db.ref('rooms/' + key + '/meta').get();
+    if (!snap.exists()) { homeError.textContent = 'Numéro ou code secret incorrect.'; return; }
+    // salon resté vide : on efface les anciens messages avant d'entrer
+    if (!(await db.ref('rooms/' + key + '/presence').get()).exists()) await db.ref('rooms/' + key + '/messages').remove();
+    openRoom(c, p, name);
+  } catch (e) { homeError.textContent = ERR_FB; }
 };
 
-function openRoom(code, name) {
-  room = { code, name };
+function openRoom(code, pass, name) {
+  const key = code + '-' + pass;
+  room = { code, pass, key, name };
   $('roomCode').textContent = code;
+  $('roomPass').textContent = pass;
   $('home').classList.add('hidden'); $('homeTheme').classList.add('hidden');
   $('chat').classList.remove('hidden');
   $('messages').innerHTML = '<div class="empty" id="empty">Aucun message. Écris le premier !</div>';
-  msgRef = db.ref('rooms/' + code + '/messages').limitToLast(100);
+
+  roomRef = db.ref('rooms/' + key);
+  nameRef = db.ref('names/' + code);
+  presRef = roomRef.child('presence/' + cid);
+
+  msgRef = roomRef.child('messages').limitToLast(100);
   msgRef.on('child_added', snap => addMessage(snap.key, snap.val()));
   msgRef.on('child_removed', snap => {
     const el = $('messages').querySelector('[data-key="' + snap.key + '"]');
     if (el) el.remove();
     if (!$('messages').querySelector('.msg')) $('messages').innerHTML = '<div class="empty" id="empty">Aucun message. Écris le premier !</div>';
   });
+
+  // présence : on sait qui est dans le salon
+  roomRef.child('presence').on('value', snap => updateDisconnect(snap.numChildren()));
+  connRef = db.ref('.info/connected');
+  connRef.on('value', snap => { if (snap.val() === true && room) joinPresence(); });
+}
+
+async function joinPresence() {
+  try {
+    await roomRef.child('meta').set({ created: TS() }); // recrée le salon s'il a été effacé pendant une coupure
+    await nameRef.set({ created: TS() });
+    await presRef.set(true);
+    updateDisconnect((await roomRef.child('presence').get()).numChildren());
+  } catch (e) {}
+}
+
+// Si je suis seul et que je pars (ou perds la connexion), tout le salon disparaît.
+// S'il y a du monde, seul moi je disparais.
+function updateDisconnect(n) {
+  if (!room) return;
+  if (n <= 1) {
+    roomRef.onDisconnect().remove();
+    nameRef.onDisconnect().remove();
+  } else {
+    roomRef.onDisconnect().cancel();
+    nameRef.onDisconnect().cancel();
+    presRef.onDisconnect().remove();
+  }
 }
 
 /* ---------- Affichage des messages ---------- */
@@ -284,7 +344,7 @@ function addMessage(key, m) {
     const del = document.createElement('button'); del.type = 'button'; del.className = 'del'; del.textContent = 'Supprimer';
     del.onclick = () => {
       if (confirm('Supprimer ce message ?')) {
-        db.ref('rooms/' + room.code + '/messages/' + key).remove().catch(() => flash('Suppression impossible'));
+        db.ref('rooms/' + room.key + '/messages/' + key).remove().catch(() => flash('Suppression impossible'));
       }
     };
     foot.appendChild(del);
@@ -307,7 +367,7 @@ function flash(msg) {
 }
 
 function send(data) {
-  return db.ref('rooms/' + room.code + '/messages').push(Object.assign({
+  return db.ref('rooms/' + room.key + '/messages').push(Object.assign({
     name: room.name, uid, ts: firebase.database.ServerValue.TIMESTAMP
   }, data)).catch(() => flash('Message non envoyé'));
 }
@@ -406,13 +466,25 @@ $('micBtn').onclick = () => { recorder ? stopRec(false) : startRec(); };
 $('cancelRec').onclick = () => stopRec(true);
 
 /* ---------- Quitter ---------- */
-$('leaveBtn').onclick = () => {
+$('leaveBtn').onclick = async () => {
   stopRec(true);
+  const rr = roomRef, nr = nameRef, pr = presRef;
+  if (connRef) connRef.off();
   if (msgRef) msgRef.off();
-  msgRef = null; room = null;
+  if (rr) rr.child('presence').off();
+  msgRef = null; room = null; roomRef = null; nameRef = null; presRef = null; connRef = null;
   $('chat').classList.add('hidden');
   $('home').classList.remove('hidden'); $('homeTheme').classList.remove('hidden');
-  $('code').value = ''; $('newCode').value = ''; homeError.textContent = '';
+  ['code', 'pass', 'newCode', 'newPass'].forEach(id => $(id).value = '');
+  homeError.textContent = '';
+  try {
+    if (rr) {
+      await rr.onDisconnect().cancel(); await nr.onDisconnect().cancel();
+      await pr.remove();
+      // plus personne : le salon et tous ses messages sont supprimés
+      if (!(await rr.child('presence').get()).exists()) { await rr.remove(); await nr.remove(); }
+    }
+  } catch (e) {}
 };
 </script>
 </body>
